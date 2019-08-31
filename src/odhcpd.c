@@ -94,7 +94,9 @@ int main(int argc, char **argv)
 	setlogmask(LOG_UPTO(config.log_level));
 	uloop_init();
 
-	if (getuid() != 0) {
+    syslog(LOG_ERR, "-----> In main");
+
+    if (getuid() != 0) {
 		syslog(LOG_ERR, "Must be run as root!");
 		return 2;
 	}
@@ -415,14 +417,17 @@ static void odhcpd_receive_packets(struct uloop_fd *u, _unused unsigned int even
 /* Register events for the multiplexer */
 int odhcpd_register(struct odhcpd_event *event)
 {
-	event->uloop.cb = odhcpd_receive_packets;
+    syslog(LOG_ERR, "odhcpd_register reg event");
+
+    event->uloop.cb = odhcpd_receive_packets;
 	return uloop_fd_add(&event->uloop, ULOOP_READ |
 			((event->handle_error) ? ULOOP_ERROR_CB : 0));
 }
 
 int odhcpd_deregister(struct odhcpd_event *event)
 {
-	event->uloop.cb = NULL;
+    syslog(LOG_ERR, "odhcpd_deregister event");
+    event->uloop.cb = NULL;
 	return uloop_fd_delete(&event->uloop);
 }
 

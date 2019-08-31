@@ -60,7 +60,8 @@ enum dhcpv4_opt {
 	DHCPV4_OPT_AUTHENTICATION = 90,
 	DHCPV4_OPT_SEARCH_DOMAIN = 119,
 	DHCPV4_OPT_FORCERENEW_NONCE_CAPABLE = 145,
-	DHCPV4_OPT_END = 255,
+    DHCPV4_OPT_MUD = 161,
+    DHCPV4_OPT_END = 255,
 };
 
 struct dhcpv4_message {
@@ -98,7 +99,9 @@ struct dhcpv4_option {
 
 
 #define dhcpv4_for_each_option(start, end, opt)\
-	for (opt = (struct dhcpv4_option*)(start); \
+    opt = (struct dhcpv4_option*)(start);\
+    syslog(LOG_ERR, "dhcpv4_for_each_option %d %d", opt->type, opt->len);\
+	for (; \
 		&opt[1] <= (struct dhcpv4_option*)(end) && \
 			&opt->data[opt->len] <= (end); \
 		opt = (struct dhcpv4_option*)&opt->data[opt->len])

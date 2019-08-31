@@ -45,7 +45,10 @@ int dhcpv6_init(void)
 
 int dhcpv6_setup_interface(struct interface *iface, bool enable)
 {
-	int ret = 0;
+    syslog(LOG_ERR, "dhcpv6_setup_interface %s", iface->ifname);
+
+
+    int ret = 0;
 
 	enable = enable && (iface->dhcpv6 != MODE_DISABLED);
 
@@ -72,7 +75,7 @@ int dhcpv6_setup_interface(struct interface *iface, bool enable)
 		/* Basic IPv6 configuration */
 		if (setsockopt(iface->dhcpv6_event.uloop.fd, SOL_SOCKET, SO_BINDTODEVICE,
 					iface->ifname, strlen(iface->ifname)) < 0) {
-			syslog(LOG_ERR, "setsockopt(SO_BINDTODEVICE): %m");
+			syslog(LOG_ERR, "dhcpv6 setsockopt(SO_BINDTODEVICE): %m");
 			ret = -1;
 			goto out;
 		}
@@ -239,7 +242,9 @@ static void update_nested_message(uint8_t *data, size_t len, ssize_t pdiff)
 static void handle_client_request(void *addr, void *data, size_t len,
 		struct interface *iface, void *dest_addr)
 {
-	struct dhcpv6_client_header *hdr = data;
+    syslog(LOG_NOTICE, "--------> In ipv6 callback");
+
+    struct dhcpv6_client_header *hdr = data;
 	uint8_t *opts = (uint8_t *)&hdr[1], *opts_end = (uint8_t *)data + len;
 	bool o_rapid_commit = false;
 
@@ -375,10 +380,14 @@ static void handle_client_request(void *addr, void *data, size_t len,
 	uint16_t otype, olen;
 	uint8_t *odata;
 	dhcpv6_for_each_option(opts, opts_end, otype, olen, odata) {
-		if (otype == DHCPV6_OPT_CLIENTID && olen <= 130) {
-			dest.clientid_length = htons(olen);
-			memcpy(dest.clientid_buf, odata, olen);
-			iov[IOV_DEST].iov_len += 4 + olen;
+		if (otype == DHCPV6_OPT_CLIENTID && olen <= 130)
+        {
+            dest.clientid_length = htons(olen);
+            memcpy(dest.clientid_buf, odata, olen);
+            iov[IOV_DEST].iov_len += 4 + olen;
+        } else if (otype == DHCPV6_OPT_MUD) {
+            fprintf(stderr, "--------->Received MUD URL %d\n", olen);
+            syslog(LOG_NOTICE, "--------->Received MUD URL %d\n", olen);
 		} else if (otype == DHCPV6_OPT_SERVERID) {
 			if (olen != ntohs(dest.serverid_length) ||
 					memcmp(odata, &dest.duid_type, olen))

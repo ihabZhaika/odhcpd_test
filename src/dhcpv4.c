@@ -67,7 +67,9 @@ struct odhcpd_ref_ip {
 /* Create socket and register events */
 int dhcpv4_init(void)
 {
-	uloop_timeout_set(&valid_until_timeout, 1000);
+    syslog(LOG_NOTICE, "dhcpv4_init");
+
+    uloop_timeout_set(&valid_until_timeout, 1000);
 	netlink_add_netevent_handler(&dhcpv4_netevent_handler);
 
 	return 0;
@@ -75,16 +77,19 @@ int dhcpv4_init(void)
 
 int dhcpv4_setup_interface(struct interface *iface, bool enable)
 {
-	int ret = 0;
+    syslog(LOG_ERR, "dhcpv4_setup_interface %s", iface->ifname);
+
+    int ret = 0;
 
 	enable = enable && (iface->dhcpv4 != MODE_DISABLED);
+    syslog(LOG_ERR, "dhcpv4_setup_interface enable %d", enable);
 
 	if (iface->dhcpv4_event.uloop.fd >= 0) {
 		uloop_fd_delete(&iface->dhcpv4_event.uloop);
 		close(iface->dhcpv4_event.uloop.fd);
 		iface->dhcpv4_event.uloop.fd = -1;
 	}
-
+    syslog(LOG_ERR, "dhcpv4_setup_interface above enable");
 	if (enable) {
 		struct sockaddr_in bind_addr = {AF_INET, htons(DHCPV4_SERVER_PORT),
 					{INADDR_ANY}, {0}};
@@ -94,7 +99,8 @@ int dhcpv4_setup_interface(struct interface *iface, bool enable)
 		if (iface->dhcpv4_event.uloop.fd < 0) {
 			syslog(LOG_ERR, "socket(AF_INET): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "iface->dhcpv4_event.uloop.fd < 0 %s", iface->ifname);
+            goto out;
 		}
 
 		/* Basic IPv4 configuration */
@@ -109,14 +115,17 @@ int dhcpv4_setup_interface(struct interface *iface, bool enable)
 					&val, sizeof(val)) < 0) {
 			syslog(LOG_ERR, "setsockopt(SO_BROADCAST): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "if (setsockopt(iface->dhcpv4_event.uloop.fd, SOL_SOCKET, SO_BROADCAST, %s", iface->ifname);
+            goto out;
 		}
 
 		if (setsockopt(iface->dhcpv4_event.uloop.fd, IPPROTO_IP, IP_PKTINFO,
 					&val, sizeof(val)) < 0) {
 			syslog(LOG_ERR, "setsockopt(IP_PKTINFO): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "if (setsockopt(iface->dhcpv4_event.uloop.fd, IPPROTO_IP, IP_PKTINFO, %s", iface->ifname);
+
+            goto out;
 		}
 
 		val = IPTOS_PREC_INTERNETCONTROL;
@@ -124,7 +133,8 @@ int dhcpv4_setup_interface(struct interface *iface, bool enable)
 					&val, sizeof(val)) < 0) {
 			syslog(LOG_ERR, "setsockopt(IP_TOS): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "etsockopt(iface->dhcpv4_event.uloop.fd, IPPROTO_IP, IP_TOS %s", iface->ifname);
+            goto out;
 		}
 
 		val = IP_PMTUDISC_DONT;
@@ -132,49 +142,58 @@ int dhcpv4_setup_interface(struct interface *iface, bool enable)
 					&val, sizeof(val)) < 0) {
 			syslog(LOG_ERR, "setsockopt(IP_MTU_DISCOVER): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "setsockopt(iface->dhcpv4_event.uloop.fd, IPPROTO_IP, IP_MTU_DISCOVER, %s", iface->ifname);
+            goto out;
 		}
 
 		if (setsockopt(iface->dhcpv4_event.uloop.fd, SOL_SOCKET, SO_BINDTODEVICE,
 					iface->ifname, strlen(iface->ifname)) < 0) {
-			syslog(LOG_ERR, "setsockopt(SO_BINDTODEVICE): %m");
+			syslog(LOG_ERR, "dhcpv4_event setsockopt(SO_BINDTODEVICE): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "setsockopt(iface->dhcpv4_event.uloop.fd, SOL_SOCKET, SO_BINDTODEVICE, %s", iface->ifname);
+            goto out;
 		}
 
 		if (bind(iface->dhcpv4_event.uloop.fd, (struct sockaddr*)&bind_addr,
 					sizeof(bind_addr)) < 0) {
 			syslog(LOG_ERR, "bind(): %m");
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "bind(iface->dhcpv4_event.uloop.fd, (struct sockaddr*)&bind_addr, %s", iface->ifname);
+            goto out;
 		}
 
 		if (setup_dhcpv4_addresses(iface) < 0) {
 			ret = -1;
-			goto out;
+            syslog(LOG_ERR, "setup_dhcpv4_addresses(iface) < 0 %s", iface->ifname);
+            goto out;
 		}
-
+        syslog(LOG_ERR, "dhcpv4_setup_interface adding event listener %s", iface->ifname);
 		iface->dhcpv4_event.handle_dgram = handle_dhcpv4;
-		odhcpd_register(&iface->dhcpv4_event);
-	} else {
+        ret = odhcpd_register(&iface->dhcpv4_event);
+        syslog(LOG_ERR, "dhcpv4_setup_interface reg result %d for %s", ret, iface->ifname);
+
+    } else {
 		while (!list_empty(&iface->dhcpv4_assignments))
 			free_assignment(list_first_entry(&iface->dhcpv4_assignments,
 							struct dhcp_assignment, head));
 	}
 
 out:
-	if (ret < 0 && iface->dhcpv4_event.uloop.fd >= 0) {
-		close(iface->dhcpv4_event.uloop.fd);
+    if (ret < 0 && iface->dhcpv4_event.uloop.fd >= 0) {
+        syslog(LOG_ERR, "dhcpv4_setup_interface out err %s", iface->ifname);
+        close(iface->dhcpv4_event.uloop.fd);
 		iface->dhcpv4_event.uloop.fd = -1;
 	}
-
+    syslog(LOG_ERR, "dhcpv4_setup_interface ret %d %s",ret, iface->ifname);
 	return ret;
 }
 
 
 static void dhcpv4_netevent_cb(unsigned long event, struct netevent_handler_info *info)
 {
-	struct interface *iface = info->iface;
+    syslog(LOG_NOTICE, "dhcpv4_netevent_%s", info->iface->ifname);
+
+    struct interface *iface = info->iface;
 
 	if (!iface || iface->dhcpv4 == MODE_DISABLED)
 		return;
@@ -204,7 +223,9 @@ static struct dhcp_assignment *find_assignment_by_hwaddr(struct interface *iface
 
 static int setup_dhcpv4_addresses(struct interface *iface)
 {
-	iface->dhcpv4_start_ip.s_addr = INADDR_ANY;
+    syslog(LOG_NOTICE, "setup_dhcpv4_addresses ");
+
+    iface->dhcpv4_start_ip.s_addr = INADDR_ANY;
 	iface->dhcpv4_end_ip.s_addr = INADDR_ANY;
 	iface->dhcpv4_local.s_addr = INADDR_ANY;
 	iface->dhcpv4_bcast.s_addr = INADDR_ANY;
@@ -399,7 +420,8 @@ static void handle_addrlist_change(struct interface *iface)
 
 static char *dhcpv4_msg_to_string(uint8_t reqmsg)
 {
-	switch (reqmsg) {
+    syslog(LOG_ERR, "dhcpv4_msg_to_string %d", reqmsg);
+    switch (reqmsg) {
 	case (DHCPV4_MSG_DISCOVER):
 		return "DHCPV4_MSG_DISCOVER";
 	case (DHCPV4_MSG_OFFER):
@@ -452,7 +474,9 @@ static void dhcpv4_put(struct dhcpv4_message *msg, uint8_t **cookie,
 
 static void dhcpv4_fr_send(struct dhcp_assignment *a)
 {
-	struct dhcpv4_message fr_msg = {
+    syslog(LOG_NOTICE, "dhcpv4_fr_send ");
+
+    struct dhcpv4_message fr_msg = {
 		.op = DHCPV4_BOOTREPLY,
 		.htype = 1,
 		.hlen = 6,
@@ -592,16 +616,25 @@ static void dhcpv4_fr_stop(struct dhcp_assignment *a)
 static void handle_dhcpv4(void *addr, void *data, size_t len,
 		struct interface *iface, _unused void *dest_addr)
 {
-	struct dhcpv4_message *req = data;
+    syslog(LOG_ERR, "handle_dhcpv4 %d", iface->dhcpv4);
+
+    struct dhcpv4_message *req = data;
 
 	if (iface->dhcpv4 == MODE_DISABLED)
-		return;
+    {
+        syslog(LOG_ERR, "handle_dhcpv4 1 %d", iface->dhcpv4);
+        //return;
+    }
 
 	if (len < offsetof(struct dhcpv4_message, options) + 4 ||
 			req->op != DHCPV4_BOOTREQUEST || req->hlen != 6)
-		return;
+    {
+        syslog(LOG_ERR, "handle_dhcpv4 2 %d %d %d",len < (offsetof(struct dhcpv4_message, options) + 4),
+        req->op != DHCPV4_BOOTREQUEST , req->hlen != 6);
+        return;
+    }
 
-	syslog(LOG_NOTICE, "Got DHCPv4 request on %s", iface->name);
+	syslog(LOG_ERR, "Got DHCPv4 request on %s", iface->name);
 
 	if (!iface->dhcpv4_start_ip.s_addr && !iface->dhcpv4_end_ip.s_addr) {
 		syslog(LOG_ERR, "No DHCP range available on %s", iface->name);
@@ -642,11 +675,15 @@ static void handle_dhcpv4(void *addr, void *data, size_t len,
 	bool accept_fr_nonce = false;
 	bool incl_fr_opt = false;
 
-	uint8_t *start = &req->options[4];
+    syslog(LOG_ERR, "Iterate on lenn %ld", len);
+
+    uint8_t *start = &req->options[4];
 	uint8_t *end = ((uint8_t*)data) + len;
 	struct dhcpv4_option *opt;
 	dhcpv4_for_each_option(start, end, opt) {
-		if (opt->type == DHCPV4_OPT_MESSAGE && opt->len == 1)
+        syslog(LOG_ERR, "Option Type %d and len %d\n", opt->type, opt->len);
+
+        if (opt->type == DHCPV4_OPT_MESSAGE && opt->len == 1)
 			reqmsg = opt->data[0];
 		else if (opt->type == DHCPV4_OPT_REQOPTS && opt->len > 0) {
 			reqopts_len = opt->len;
@@ -656,7 +693,10 @@ static void handle_dhcpv4(void *addr, void *data, size_t len,
 			hostname_len = opt->len;
 			memcpy(hostname, opt->data, hostname_len);
 			hostname[hostname_len] = 0;
-		} else if (opt->type == DHCPV4_OPT_IPADDRESS && opt->len == 4)
+		}
+        else if (opt->type == DHCPV4_OPT_MUD) {
+            syslog(LOG_ERR, "Received MUD URL: len %d url: %s", opt->len, opt->data);
+        } else if (opt->type == DHCPV4_OPT_IPADDRESS && opt->len == 4)
 			memcpy(&reqaddr, opt->data, 4);
 		else if (opt->type == DHCPV4_OPT_SERVERID && opt->len == 4) {
 			if (memcmp(opt->data, &iface->dhcpv4_local, 4))
